@@ -16,12 +16,14 @@ public class LedgerService {
     }
 
     public Account createAccount(UUID ownerId, Currency currency) {
+        this.validateNotNull(ownerId);
+        this.validateNotNull(currency);
         Account account = new Account(ownerId, currency);
         this.accounts.put(account.getId(), account);
         return account;
     }
 
-    public List<Account> getAccounts(UUID ownerId) throws AccountNotFoundException {
+    public List<Account> getAccounts(UUID ownerId) {
         this.validateNotNull(ownerId);
         return this.accounts.values().stream()
                 .filter(account -> account.getOwnerId().equals(ownerId))
