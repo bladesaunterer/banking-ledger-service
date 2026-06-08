@@ -46,3 +46,8 @@ Using an unsigned amount with a separate field would make the validation more co
 ### Transaction amount values are always positive
 While ledger entries can contain negative values, the transaction level amounts are defined only using positive values in the 
 interface as this is more natural at the call site. e.g. a negative deposit doesn't make semantic sense
+
+### Use enum type to define currency constraint in DB as last line defense
+Define currency type using ENUM in db to provide a level of validation at the DB level as a last level defense against bugs
+from the application layer. Given that correctness is very important in a banking system, we should be defensive where we
+can.
