@@ -23,6 +23,29 @@ public class LedgerEntry {
         this.id = UUID.randomUUID();
     }
 
+    private LedgerEntry(UUID id, UUID accountId, Instant timestamp, BigDecimal amount) {
+        if(amount == null) {
+            throw new IllegalArgumentException("Reconstructed Ledger Entry must have amount");
+        }
+        if(accountId == null) {
+            throw new IllegalArgumentException("Reconstructed Ledger Entry must have accountId");
+        }
+        if(timestamp == null) {
+            throw new IllegalArgumentException("Reconstructed Ledger Entry must have timestamp");
+        }
+        if(id == null) {
+            throw new IllegalArgumentException("Reconstructed Ledger Entry must have id");
+        }
+        this.amount = amount;
+        this.timestamp = timestamp;
+        this.accountId = accountId;
+        this.id = id;
+    }
+
+    public static LedgerEntry reconstruct(UUID id, UUID accountId, Instant timestamp, BigDecimal amount) {
+        return new LedgerEntry(id, accountId, timestamp, amount);
+    }
+
     public BigDecimal getAmount() {
         return amount;
     }
