@@ -1,33 +1,34 @@
 package com.carson.ledger.service;
 
 import com.carson.ledger.domain.*;
+import com.carson.ledger.persistence.AccountRepository;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Service
 public class LedgerService {
-    private final Map<UUID, Account> accounts;
     private final Map<UUID, Transaction> transactions;
+    private final AccountRepository accountRepository;
 
-    public LedgerService() {
-        this.accounts = new ConcurrentHashMap<>();
+    public LedgerService(AccountRepository accountRepository) {
         this.transactions = new ConcurrentHashMap<>();
+        this.accountRepository = accountRepository;
     }
 
     public Account createAccount(UUID ownerId, Currency currency) {
         this.validateNotNull(ownerId);
         this.validateNotNull(currency);
         Account account = new Account(ownerId, currency);
-        this.accounts.put(account.getId(), account);
+        this.accountRepository.save(account);
         return account;
     }
 
     public List<Account> getAccounts(UUID ownerId) {
         this.validateNotNull(ownerId);
-        return this.accounts.values().stream()
-                .filter(account -> account.getOwnerId().equals(ownerId))
-                .toList();
+        return this.accountRepository.findByOwnerId(ownerId);
     }
 
     public Transaction deposit(UUID accountId, BigDecimal amount) throws AccountNotFoundException {
@@ -107,7 +108,7 @@ public class LedgerService {
     }
 
     private void checkAccountExists(UUID accountId) throws AccountNotFoundException {
-        if(!this.accounts.containsKey(accountId)) {
+        if(!this.accountRepository.existsById(accountId)) {
             throw new AccountNotFoundException("Account does not exist");
         }
     }

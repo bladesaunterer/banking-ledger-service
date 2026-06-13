@@ -1,5 +1,5 @@
 CREATE TABLE ledger_entries (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id          UUID PRIMARY KEY,
     amount   NUMERIC(19,4) NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
     account_id UUID NOT NULL REFERENCES accounts(id),

@@ -4,7 +4,7 @@ CREATE TYPE currency AS ENUM (
 );
 
 CREATE TABLE accounts (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL ,
+    id          UUID PRIMARY KEY,
+    owner_id     UUID NOT NULL ,
     currency    currency NOT NULL
 );
