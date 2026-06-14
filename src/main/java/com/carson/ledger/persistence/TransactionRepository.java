@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface TransactionRepository {
     Transaction save(Transaction transaction);
-    List<TransactionRecordDto> findByAccountId(UUID accountId);
+    List<Transaction> findByAccountId(UUID accountId);
 }

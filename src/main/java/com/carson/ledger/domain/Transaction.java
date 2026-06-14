@@ -11,8 +11,8 @@ public class Transaction {
     private final Instant timestamp;
     private final TransactionEvent eventType;
 
-    private Transaction(Instant timestamp, List<LedgerEntry> entries, TransactionEvent eventType) {
-        this.id = UUID.randomUUID();
+    private Transaction(UUID id , Instant timestamp, List<LedgerEntry> entries, TransactionEvent eventType) {
+        this.id = id;
         this.timestamp = timestamp;
         this.entries = List.copyOf(entries);
         this.eventType = eventType;
@@ -37,6 +37,8 @@ public class Transaction {
     public static class Builder {
         private final List<LedgerEntry> entries = new ArrayList<>();
         private TransactionEvent event;
+        private UUID transactionId;
+        private Instant timestamp;
 
         public Builder addEntry(LedgerEntry entry) {
             this.entries.add(entry);
@@ -48,6 +50,16 @@ public class Transaction {
             return this;
         }
 
+        public Builder addTransactionId(UUID transactionId) {
+            this.transactionId = transactionId;
+            return this;
+        }
+
+        public Builder addTimestamp(Instant timestamp) {
+            this.timestamp = timestamp;
+            return this;
+        }
+
         public Transaction build() {
             if (this.entries.isEmpty()) {
                 throw new IllegalArgumentException("Transaction must contain entries");
@@ -55,7 +67,16 @@ public class Transaction {
             if(this.event == null) {
                 throw new IllegalArgumentException("Transaction must contain event type");
             }
-            return new Transaction(Instant.now(), entries, event);
+
+            if(this.transactionId == null) {
+                this.transactionId = UUID.randomUUID();
+            }
+
+            if (this.timestamp == null) {
+                this.timestamp = Instant.now();
+            }
+
+            return new Transaction(this.transactionId, this.timestamp, entries, event);
         }
     }
 }

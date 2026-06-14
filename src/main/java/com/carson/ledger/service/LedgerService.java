@@ -2,7 +2,10 @@ package com.carson.ledger.service;
 
 import com.carson.ledger.domain.*;
 import com.carson.ledger.persistence.AccountRepository;
+import com.carson.ledger.persistence.LedgerEntryRepository;
+import com.carson.ledger.persistence.TransactionRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -10,20 +13,22 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class LedgerService {
-    private final Map<UUID, Transaction> transactions;
     private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
+    private final LedgerEntryRepository ledgerEntryRepository;
 
-    public LedgerService(AccountRepository accountRepository) {
-        this.transactions = new ConcurrentHashMap<>();
+    public LedgerService(AccountRepository accountRepository, TransactionRepository transactionRepository, LedgerEntryRepository ledgerEntryRepository) {
         this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
+        this.ledgerEntryRepository = ledgerEntryRepository;
+
     }
 
     public Account createAccount(UUID ownerId, Currency currency) {
         this.validateNotNull(ownerId);
         this.validateNotNull(currency);
         Account account = new Account(ownerId, currency);
-        this.accountRepository.save(account);
-        return account;
+        return this.accountRepository.save(account);
     }
 
     public List<Account> getAccounts(UUID ownerId) {
@@ -31,20 +36,25 @@ public class LedgerService {
         return this.accountRepository.findByOwnerId(ownerId);
     }
 
+    @Transactional
     public Transaction deposit(UUID accountId, BigDecimal amount) throws AccountNotFoundException {
         this.validateNotNull(amount);
         this.validateNotNull(accountId);
         this.checkAmountPositive(amount);
         this.checkAccountExists(accountId);
 
-        Transaction newDeposit = new Transaction.Builder()
+        LedgerEntry entry = new LedgerEntry(accountId, amount);
+        Transaction depositTransaction = new Transaction.Builder()
                 .addEventType(TransactionEvent.DEPOSIT)
-                .addEntry(new LedgerEntry(accountId, amount))
+                .addEntry(entry)
                 .build();
-        this.transactions.put(newDeposit.getId(), newDeposit);
-        return newDeposit;
+        this.transactionRepository.save(depositTransaction);
+        this.ledgerEntryRepository.save(entry, depositTransaction.getId());
+
+        return depositTransaction;
     }
 
+    @Transactional
     public Transaction withdraw(UUID accountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException {
         this.validateNotNull(amount);
         this.validateNotNull(accountId);
@@ -52,15 +62,19 @@ public class LedgerService {
         this.checkAccountExists(accountId);
         this.checkFundsSufficient(accountId, amount);
 
-        Transaction newWithdrawal = new Transaction.Builder()
+        LedgerEntry entry = new LedgerEntry(accountId, amount.negate());
+        Transaction withdrawalTransaction = new Transaction.Builder()
                 .addEventType(TransactionEvent.WITHDRAWAL)
-                .addEntry(new LedgerEntry(accountId, amount.negate()))
+                .addEntry(entry)
                 .build();
 
-        this.transactions.put(newWithdrawal.getId(), newWithdrawal);
-        return newWithdrawal;
+        this.transactionRepository.save(withdrawalTransaction);
+        this.ledgerEntryRepository.save(entry, withdrawalTransaction.getId());
+
+        return withdrawalTransaction;
     }
 
+    @Transactional
     public Transaction transfer(UUID fromAccountId, UUID toAccountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException {
         this.validateNotNull(amount);
         this.validateNotNull(fromAccountId);
@@ -73,38 +87,31 @@ public class LedgerService {
         this.checkAccountExists(toAccountId);
         this.checkFundsSufficient(fromAccountId, amount);
 
-        Transaction newTransfer = new Transaction.Builder()
+        LedgerEntry credit = new LedgerEntry(toAccountId, amount);
+        LedgerEntry debt = new LedgerEntry(fromAccountId, amount.negate());
+        Transaction transferTransaction = new Transaction.Builder()
                 .addEventType(TransactionEvent.TRANSFER)
-                .addEntry(new LedgerEntry(toAccountId, amount))
-                .addEntry(new LedgerEntry(fromAccountId, amount.negate()))
+                .addEntry(credit)
+                .addEntry(debt)
                 .build();
 
-        this.transactions.put(newTransfer.getId(), newTransfer);
-        return newTransfer;
+        this.transactionRepository.save(transferTransaction);
+        this.ledgerEntryRepository.save(credit, transferTransaction.getId());
+        this.ledgerEntryRepository.save(debt, transferTransaction.getId());
+
+        return transferTransaction;
     }
 
     public List<Transaction> getTransactions(UUID accountId) throws AccountNotFoundException {
         this.validateNotNull(accountId);
         this.checkAccountExists(accountId);
-
-        return this.transactions.values().stream()
-                .filter(transaction -> transaction.getEntries().stream()
-                        .anyMatch(ledgerEntry -> ledgerEntry.getAccountId().equals(accountId)))
-                .sorted(Comparator.comparing(Transaction::getTimestamp)).toList();
+        return transactionRepository.findByAccountId(accountId);
     }
 
     public BigDecimal getBalance(UUID accountId) throws AccountNotFoundException {
         this.validateNotNull(accountId);
         this.checkAccountExists(accountId);
-        return calculateBalance(accountId);
-    }
-
-    private BigDecimal calculateBalance(UUID accountId) {
-        return this.transactions.values().stream()
-                .flatMap(transaction -> transaction.getEntries().stream())
-                .filter(ledgerEntry -> ledgerEntry.getAccountId().equals(accountId))
-                .map(LedgerEntry::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return this.ledgerEntryRepository.calculateAccountBalance(accountId);
     }
 
     private void checkAccountExists(UUID accountId) throws AccountNotFoundException {
@@ -119,8 +126,8 @@ public class LedgerService {
         }
     }
 
-    private void checkFundsSufficient(UUID accountId, BigDecimal amount) throws InsufficientFundsException {
-        if (calculateBalance(accountId).compareTo(amount) < 0) {
+    private void checkFundsSufficient(UUID accountId, BigDecimal amount) throws InsufficientFundsException, AccountNotFoundException {
+        if (getBalance(accountId).compareTo(amount) < 0) {
             throw new InsufficientFundsException("Insufficient funds");
         }
     }

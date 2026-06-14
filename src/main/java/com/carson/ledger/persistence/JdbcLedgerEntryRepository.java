@@ -42,8 +42,6 @@ public class JdbcLedgerEntryRepository implements LedgerEntryRepository {
         throw new PersistenceException("Ledger Entry creation failed");
     }
 
-
-
     @Override
     public List<LedgerEntry> findByAccountId(UUID accountId) {
         String sql = "SELECT * FROM ledger_entries WHERE account_id = :account_id";
