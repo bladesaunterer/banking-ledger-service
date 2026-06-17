@@ -44,11 +44,10 @@ public class LedgerService {
         this.checkAccountExists(accountId);
 
         LedgerEntry entry = new LedgerEntry(accountId, amount);
-        Transaction depositTransaction = new Transaction.Builder()
+        Transaction depositTransaction = this.transactionRepository.save(new Transaction.Builder()
                 .addEventType(TransactionEvent.DEPOSIT)
                 .addEntry(entry)
-                .build();
-        this.transactionRepository.save(depositTransaction);
+                .build());
         this.ledgerEntryRepository.save(entry, depositTransaction.getId());
 
         return depositTransaction;
@@ -63,12 +62,10 @@ public class LedgerService {
         this.checkFundsSufficient(accountId, amount);
 
         LedgerEntry entry = new LedgerEntry(accountId, amount.negate());
-        Transaction withdrawalTransaction = new Transaction.Builder()
+        Transaction withdrawalTransaction = this.transactionRepository.save(new Transaction.Builder()
                 .addEventType(TransactionEvent.WITHDRAWAL)
                 .addEntry(entry)
-                .build();
-
-        this.transactionRepository.save(withdrawalTransaction);
+                .build());
         this.ledgerEntryRepository.save(entry, withdrawalTransaction.getId());
 
         return withdrawalTransaction;
@@ -89,13 +86,11 @@ public class LedgerService {
 
         LedgerEntry credit = new LedgerEntry(toAccountId, amount);
         LedgerEntry debt = new LedgerEntry(fromAccountId, amount.negate());
-        Transaction transferTransaction = new Transaction.Builder()
+        Transaction transferTransaction = this.transactionRepository.save(new Transaction.Builder()
                 .addEventType(TransactionEvent.TRANSFER)
                 .addEntry(credit)
                 .addEntry(debt)
-                .build();
-
-        this.transactionRepository.save(transferTransaction);
+                .build());
         this.ledgerEntryRepository.save(credit, transferTransaction.getId());
         this.ledgerEntryRepository.save(debt, transferTransaction.getId());
 
