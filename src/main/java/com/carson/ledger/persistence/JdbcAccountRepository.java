@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.util.Currency;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -20,12 +21,13 @@ public class JdbcAccountRepository implements AccountRepository{
 
     @Override
     public Account save(Account account) {
-        String sql = "INSERT INTO accounts (id, owner_id, currency) VALUES (:id, :owner_id, :currency)";
+        String sql = "INSERT INTO accounts (id, owner_id, currency) VALUES (:id, :owner_id, :currency::currency)";
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", account.getId())
                 .addValue("owner_id", account.getOwnerId())
                 .addValue("currency", account.getCurrency().getCurrencyCode());
+
         int rowsAffected = jdbcTemplate.update(sql, params);
         if(rowsAffected == 1) {
             return account;
@@ -57,5 +59,25 @@ public class JdbcAccountRepository implements AccountRepository{
         return Boolean.TRUE.equals(
                 jdbcTemplate.queryForObject(sql, params, Boolean.class)
         );
+    }
+
+    @Override
+    public Optional<Account> findById(UUID accountId) {
+        String sql = "SELECT id, owner_id, currency FROM accounts WHERE id = :accountId";
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("accountId", accountId);
+
+        List<Account> result = jdbcTemplate.query(sql, params, (ResultSet rs, int rowNum) -> Account.reconstruct(
+                (UUID) rs.getObject("id"),
+                (UUID) rs.getObject("owner_id"),
+                Currency.getInstance(rs.getString("currency")))
+        );
+
+        if(result.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(result.getFirst());
     }
 }

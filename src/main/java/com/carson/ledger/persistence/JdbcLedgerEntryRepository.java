@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAccessor;
 import java.util.List;
 import java.util.UUID;
@@ -26,12 +28,12 @@ public class JdbcLedgerEntryRepository implements LedgerEntryRepository {
 
     @Override
     public LedgerEntry save(LedgerEntry entry, UUID transactionId) {
-        String sql = "INSERT INTO ledger_entries (id, amount, timestamp, account_id, transaction_id) VALUES (:id, :amount, :timestamp, :account_id, :transaction_id)";
+        String sql = "INSERT INTO ledger_entries (id, amount, timestamp, account_id, transaction_id) VALUES (:id, :amount, :timestamp::timestamptz, :account_id, :transaction_id)";
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", entry.getId())
                 .addValue("amount", entry.getAmount())
-                .addValue("timestamp", entry.getTimestamp())
+                .addValue("timestamp", OffsetDateTime.ofInstant(entry.getTimestamp(), ZoneOffset.UTC))
                 .addValue("account_id", entry.getAccountId())
                 .addValue("transaction_id", transactionId);
 

@@ -37,7 +37,7 @@ public class LedgerService {
     }
 
     @Transactional
-    public Transaction deposit(UUID accountId, BigDecimal amount) throws AccountNotFoundException {
+    public Transaction deposit(UUID accountId, BigDecimal amount) throws AccountNotFoundException, NegativeAmountException {
         this.validateNotNull(amount);
         this.validateNotNull(accountId);
         this.checkAmountPositive(amount);
@@ -54,7 +54,7 @@ public class LedgerService {
     }
 
     @Transactional
-    public Transaction withdraw(UUID accountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException {
+    public Transaction withdraw(UUID accountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException, NegativeAmountException {
         this.validateNotNull(amount);
         this.validateNotNull(accountId);
         this.checkAmountPositive(amount);
@@ -72,16 +72,21 @@ public class LedgerService {
     }
 
     @Transactional
-    public Transaction transfer(UUID fromAccountId, UUID toAccountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException {
+    public Transaction transfer(UUID fromAccountId, UUID toAccountId, BigDecimal amount) throws AccountNotFoundException, InsufficientFundsException, CurrencyMismatchException, SameAccountException, NegativeAmountException {
         this.validateNotNull(amount);
         this.validateNotNull(fromAccountId);
         this.validateNotNull(toAccountId);
         if (fromAccountId.equals(toAccountId)) {
-            throw new IllegalArgumentException("Account identifiers cannot be the same");
+            throw new SameAccountException("Account identifiers cannot be the same");
         }
         this.checkAmountPositive(amount);
-        this.checkAccountExists(fromAccountId);
-        this.checkAccountExists(toAccountId);
+        Account fromAccountActual = this.getAccountFromRepository(fromAccountId);
+        Account toAccountActual = this.getAccountFromRepository(toAccountId);
+
+        if(!fromAccountActual.getCurrency().equals(toAccountActual.getCurrency())) {
+            throw new CurrencyMismatchException("Accounts in transaction must have same currency type");
+        }
+
         this.checkFundsSufficient(fromAccountId, amount);
 
         LedgerEntry credit = new LedgerEntry(toAccountId, amount);
@@ -115,9 +120,9 @@ public class LedgerService {
         }
     }
 
-    private void checkAmountPositive(BigDecimal amount) {
+    private void checkAmountPositive(BigDecimal amount) throws NegativeAmountException {
         if(amount.signum() <= 0) {
-            throw new IllegalArgumentException("Amount cannot be negative or zero");
+            throw new NegativeAmountException("Amount cannot be negative or zero");
         }
     }
 
@@ -125,6 +130,14 @@ public class LedgerService {
         if (getBalance(accountId).compareTo(amount) < 0) {
             throw new InsufficientFundsException("Insufficient funds");
         }
+    }
+
+    private Account getAccountFromRepository(UUID accountId) throws AccountNotFoundException {
+        Optional<Account> accountOptional = this.accountRepository.findById(accountId);
+        if(accountOptional.isEmpty()) {
+            throw new AccountNotFoundException("Account does not exist");
+        }
+        return accountOptional.get();
     }
 
     private void validateNotNull(Object value) {

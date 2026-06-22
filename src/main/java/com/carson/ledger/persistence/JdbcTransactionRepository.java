@@ -10,6 +10,9 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,12 +28,14 @@ public class JdbcTransactionRepository implements TransactionRepository {
 
     @Override
     public Transaction save(Transaction transaction) {
-        String sql = "INSERT INTO transactions(id, timestamp, event_type) VALUES (:id, :timestamp, :event_type)";
+        String sql = "INSERT INTO transactions(id, timestamp, event_type) VALUES (:id, :timestamp::timestamptz, :event_type::transaction_event)";
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", transaction.getId())
-                .addValue("timestamp", transaction.getTimestamp())
-                .addValue("event_type", transaction.getEventType());
+                .addValue("timestamp", OffsetDateTime.ofInstant(transaction.getTimestamp(), ZoneOffset.UTC))
+                .addValue("event_type", transaction.getEventType().toString());
+
+
 
         int rowsAffected = jdbcTemplate.update(sql, params);
         if (rowsAffected == 1) {

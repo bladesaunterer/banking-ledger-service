@@ -1,3 +1,5 @@
+package com.carson.ledger;
+
 import com.carson.ledger.domain.*;
 import com.carson.ledger.persistence.AccountRepository;
 import com.carson.ledger.persistence.LedgerEntryRepository;
@@ -13,10 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.Currency;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -24,7 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class LedgerServiceTest {
+public class LedgerServiceUnitTests {
 
     @Mock
     private AccountRepository accountRepository;
@@ -108,7 +107,7 @@ public class LedgerServiceTest {
 
     @Test
     public void deposit_checks_amount_is_positive() {
-        assertThrows(IllegalArgumentException.class, () -> this.ledgerService.deposit(UUID.randomUUID(), new BigDecimal(-1)));
+        assertThrows(NegativeAmountException.class, () -> this.ledgerService.deposit(UUID.randomUUID(), new BigDecimal(-1)));
     }
 
     @Test
@@ -119,7 +118,7 @@ public class LedgerServiceTest {
     }
 
     @Test
-    public void deposit_creates_transaction_in_ledger_with_correct_values() throws AccountNotFoundException {
+    public void deposit_creates_transaction_in_ledger_with_correct_values() throws AccountNotFoundException, NegativeAmountException {
         UUID accountId = UUID.randomUUID();
         when(accountRepository.existsById(accountId)).thenReturn(true);
 
@@ -148,7 +147,7 @@ public class LedgerServiceTest {
 
     @Test
     public void withdraw_checks_amount_is_positive() {
-        assertThrows(IllegalArgumentException.class, () -> this.ledgerService.withdraw(UUID.randomUUID(), new BigDecimal(-1)));
+        assertThrows(NegativeAmountException.class, () -> this.ledgerService.withdraw(UUID.randomUUID(), new BigDecimal(-1)));
     }
 
     @Test
@@ -164,7 +163,7 @@ public class LedgerServiceTest {
     }
 
     @Test
-    public void withdraw_creates_transaction_in_ledger_with_correct_values() throws AccountNotFoundException, InsufficientFundsException {
+    public void withdraw_creates_transaction_in_ledger_with_correct_values() throws AccountNotFoundException, InsufficientFundsException, NegativeAmountException {
         UUID accountId = UUID.randomUUID();
         when(accountRepository.existsById(accountId)).thenReturn(true);
         BigDecimal withdrawAmount = new BigDecimal(10);
@@ -202,46 +201,65 @@ public class LedgerServiceTest {
     @Test
     public void transfer_checks_fromAccount_and_toAccount_are_different() {
         UUID accountId = UUID.randomUUID();
-        assertThrows(IllegalArgumentException.class, () -> this.ledgerService.transfer(accountId, accountId, new BigDecimal(10)));
+        assertThrows(SameAccountException.class, () -> this.ledgerService.transfer(accountId, accountId, new BigDecimal(10)));
     }
 
     @Test
     public void transfer_checks_amount_is_positive() {
-        assertThrows(IllegalArgumentException.class, () -> this.ledgerService.transfer(UUID.randomUUID(), UUID.randomUUID(), new BigDecimal(-1)));
+        assertThrows(NegativeAmountException.class, () -> this.ledgerService.transfer(UUID.randomUUID(), UUID.randomUUID(), new BigDecimal(-1)));
     }
 
     @Test
     public void transfer_checks_toAccount_exist() {
         UUID doesntExist = UUID.randomUUID();
         UUID exists = UUID.randomUUID();
-        when(accountRepository.existsById(exists)).thenReturn(true);
-        when(accountRepository.existsById(doesntExist)).thenReturn(false);
+        when(accountRepository.findById(exists)).thenReturn(Optional.of(Account.reconstruct(UUID.randomUUID(), UUID.randomUUID(), Currency.getInstance("GBP"))));
+        when(accountRepository.findById(doesntExist)).thenReturn(Optional.empty());
         assertThrows(AccountNotFoundException.class, () -> this.ledgerService.transfer(exists, doesntExist, new BigDecimal(10)));
-
     }
 
     @Test
     public void transfer_checks_fromAccount_exist() {
         UUID doesntExist = UUID.randomUUID();
-        when(accountRepository.existsById(doesntExist)).thenReturn(false);
+        when(accountRepository.findById(doesntExist)).thenReturn(Optional.empty());
         assertThrows(AccountNotFoundException.class, () -> this.ledgerService.transfer(doesntExist, UUID.randomUUID(), new BigDecimal(10)));
     }
 
     @Test
     public void transfer_checks_funds_sufficient_for_transfer_in_fromAccount() throws AccountNotFoundException, InsufficientFundsException {
         when(accountRepository.existsById(any(UUID.class))).thenReturn(true);
+        when(accountRepository.findById(any(UUID.class))).thenReturn(Optional.of(
+                Account.reconstruct(UUID.randomUUID(),UUID.randomUUID(),Currency.getInstance("GBP")))
+        );
         when(ledgerEntryRepository.calculateAccountBalance(any(UUID.class))).thenReturn(BigDecimal.ZERO);
         assertThrows(InsufficientFundsException.class, () -> this.ledgerService.transfer(UUID.randomUUID(), UUID.randomUUID(), new BigDecimal(100)));
     }
 
     @Test
-    public void transfer_creates_transaction_in_ledger() throws AccountNotFoundException, InsufficientFundsException {
+    public void transfer_checks_currencies_match() {
+        UUID account1 = UUID.randomUUID();
+        UUID account2 = UUID.randomUUID();
+        when(accountRepository.findById(account1)).thenReturn(Optional.of(
+                Account.reconstruct(account1,UUID.randomUUID(),Currency.getInstance("GBP")))
+        );
+        when(accountRepository.findById(account2)).thenReturn(Optional.of(
+                Account.reconstruct(account2,UUID.randomUUID(),Currency.getInstance("NZD")))
+        );
+
+        assertThrows(CurrencyMismatchException.class, () -> this.ledgerService.transfer(account1, account2, new BigDecimal(100)));
+    }
+
+    @Test
+    public void transfer_creates_transaction_in_ledger() throws AccountNotFoundException, InsufficientFundsException, NegativeAmountException, CurrencyMismatchException, SameAccountException {
         UUID fromAccountId = UUID.randomUUID();
         UUID toAccountId = UUID.randomUUID();
         BigDecimal transferAmount = new BigDecimal(10);
 
         when(accountRepository.existsById(any(UUID.class))).thenReturn(true);
         when(ledgerEntryRepository.calculateAccountBalance(any(UUID.class))).thenReturn(new BigDecimal(1000));
+        when(accountRepository.findById(any(UUID.class))).thenReturn(Optional.of(
+                Account.reconstruct(UUID.randomUUID(),UUID.randomUUID(),Currency.getInstance("GBP")))
+        );
 
         LedgerEntry creditEntry = new LedgerEntry(toAccountId, transferAmount);
         LedgerEntry debtEntry = new LedgerEntry(fromAccountId, transferAmount.negate());
